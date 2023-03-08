@@ -64,7 +64,7 @@ class NostalgiaForInfinityX2(IStrategy):
     INTERFACE_VERSION = 3
 
     def version(self) -> str:
-        return "v12.0.244"
+        return "v12.0.245"
 
     # ROI table:
     minimal_roi = {
@@ -138,10 +138,10 @@ class NostalgiaForInfinityX2(IStrategy):
     # Grinding feature
     grinding_enable = True
     # Grinding stakes
-    grinding_stakes = [0.25, 0.25, 0.25, 0.25]
+    grinding_stakes = [0.25, 0.25, 0.25, 0.25, 0.25]
     grinding_stakes_alt = [1.0]
     # Current total profit
-    grinding_thresholds = [-0.04, -0.08, -0.1, -0.12]
+    grinding_thresholds = [-0.04, -0.08, -0.1, -0.12, -0.14]
     grinding_thresholds_alt = [-0.06]
 
     stake_rebuy_mode_multiplier = 0.33
@@ -2131,7 +2131,7 @@ class NostalgiaForInfinityX2(IStrategy):
         :param filled_entries: Filled entries list.
         :param filled_exits: Filled exits list.
         :param exit_rate: The exit rate.
-        :return tuple: The total profit in stake, ratio, and ratio based on the first entry stake.
+        :return tuple: The total profit in stake, ratio, ratio based on current stake, and ratio based on the first entry stake.
         """
         total_stake = 0.0
         total_profit = 0.0
@@ -2142,10 +2142,12 @@ class NostalgiaForInfinityX2(IStrategy):
         for exit in filled_exits:
             exit_stake = exit.filled * exit.average * (1 - trade.fee_close)
             total_profit += exit_stake
-        total_profit += (trade.amount * exit_rate * (1 - trade.fee_close))
+        current_stake = (trade.amount * exit_rate * (1 - trade.fee_close))
+        total_profit += current_stake
         total_profit_ratio = (total_profit / total_stake)
+        current_profit_ratio = (total_profit / current_stake)
         init_profit_ratio = (total_profit / filled_entries[0].cost)
-        return total_profit, total_profit_ratio, init_profit_ratio
+        return total_profit, total_profit_ratio, current_profit_ratio, init_profit_ratio
 
     def custom_exit(self, pair: str, trade: 'Trade', current_time: 'datetime', current_rate: float,
                     current_profit: float, **kwargs):
@@ -2165,11 +2167,13 @@ class NostalgiaForInfinityX2(IStrategy):
         filled_entries = trade.select_filled_orders(trade.entry_side)
         filled_exits = trade.select_filled_orders(trade.exit_side)
 
-        profit = 0.0
-        if (trade.realized_profit != 0.0):
-            _, profit, _ = self.calc_total_profit(trade, filled_entries, filled_exits, current_rate)
-        else:
-            profit = current_profit
+        profit_stake = 0.0
+        profit_ratio = 0.0
+        profit_current_stake_ratio = 0.0
+        profit_init_ratio = 0.0
+        profit_stake, profit_ratio, profit_current_stake_ratio, profit_init_ratio = self.calc_total_profit(trade, filled_entries, filled_exits, current_rate)
+
+        profit = profit_ratio
 
         max_profit = ((trade.max_rate - trade.open_rate) / trade.open_rate)
         max_loss = ((trade.open_rate - trade.min_rate) / trade.min_rate)
@@ -2301,7 +2305,7 @@ class NostalgiaForInfinityX2(IStrategy):
                         if (self.config['exit_pricing']['price_side'] in ["bid", "other"]):
                             exit_rate = ticker['bid']
 
-            profit_stake, profit_ratio, profit_init_ratio = self.calc_total_profit(trade, filled_entries, filled_exits, exit_rate)
+            profit_stake, profit_ratio, profit_current_stake_ratio, profit_init_ratio = self.calc_total_profit(trade, filled_entries, filled_exits, exit_rate)
 
             slice_amount = filled_entries[0].cost
             slice_profit = (exit_rate - filled_orders[-1].average) / filled_orders[-1].average
@@ -2321,19 +2325,20 @@ class NostalgiaForInfinityX2(IStrategy):
             for i in range(grinding_parts):
                 if (trade.stake_amount < stake_amount_threshold):
                     if (
-                            (profit_init_ratio < grinding_thresholds[i])
+                            (profit_current_stake_ratio < grinding_thresholds[i])
                             and
                             (
-                                (current_time - timedelta(minutes=2) > filled_entries[-1].order_filled_utc)
-                                or (slice_profit_entry < -0.005)
+                                (current_time - timedelta(minutes=30) > filled_entries[-1].order_filled_utc)
+                                or (slice_profit_entry < -0.01)
                             )
                             and (
                                 (last_candle['rsi_14'] < 50.0)
-                                and (last_candle['rsi_3'] > 10.0)
                                 and (last_candle['close_max_12'] < (last_candle['close'] * 1.1))
                                 and (last_candle['close_max_24'] < (last_candle['close'] * 1.12))
                                 and (last_candle['close_max_48'] < (last_candle['close'] * 1.16))
-                                and (last_candle['close'] < last_candle['bb20_2_low'])
+                                and (last_candle['ema_26'] > last_candle['ema_12'])
+                                and ((last_candle['ema_26'] - last_candle['ema_12']) > (last_candle['open'] * 0.005))
+                                and ((previous_candle['ema_26'] - previous_candle['ema_12']) > (last_candle['open'] / 100))
                                 and (last_candle['rsi_3_1h'] > 10.0)
                                 and (last_candle['btc_pct_close_max_72_5m'] < 1.04)
                                 and (last_candle['btc_pct_close_max_24_5m'] < 1.03)
