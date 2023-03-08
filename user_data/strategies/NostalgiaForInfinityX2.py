@@ -64,7 +64,7 @@ class NostalgiaForInfinityX2(IStrategy):
     INTERFACE_VERSION = 3
 
     def version(self) -> str:
-        return "v12.0.246"
+        return "v12.0.249"
 
     # ROI table:
     minimal_roi = {
@@ -2171,7 +2171,12 @@ class NostalgiaForInfinityX2(IStrategy):
         profit_ratio = 0.0
         profit_current_stake_ratio = 0.0
         profit_init_ratio = 0.0
-        profit_stake, profit_ratio, profit_current_stake_ratio, profit_init_ratio = self.calc_total_profit(trade, filled_entries, filled_exits, current_rate)
+        if (trade.realized_profit != 0.0):
+            profit_stake, profit_ratio, profit_current_stake_ratio, profit_init_ratio = self.calc_total_profit(trade, filled_entries, filled_exits, current_rate)
+        else:
+            profit_ratio = current_profit
+            profit_current_stake_ratio = current_profit
+            profit_init_ratio = current_profit
 
         profit = profit_ratio
 
@@ -2349,7 +2354,7 @@ class NostalgiaForInfinityX2(IStrategy):
                             buy_amount = max_stake
                         if (buy_amount < min_stake):
                             return None
-                        self.dp.send_msg(f"Grinding entry [{trade.pair}] | Rate: {current_rate} | Stake amount: {buy_amount} | Profit (stake): {profit_stake} | Profit: {(profit_init_ratio * 100.0):.2f}%")
+                        self.dp.send_msg(f"Grinding entry [{trade.pair}] | Rate: {current_rate} | Stake amount: {buy_amount} | Profit (stake): {profit_stake} | Profit: {(profit_ratio * 100.0):.2f}%")
                         return buy_amount
                 stake_amount_threshold += slice_amount * grinding_stakes[i]
 
@@ -2365,7 +2370,7 @@ class NostalgiaForInfinityX2(IStrategy):
                         if (
                                 (slice_profit_exit > 0.01)
                         ):
-                            self.dp.send_msg(f"Grinding exit (remaining) [{trade.pair}] | Rate: {exit_rate} | Stake amount: {sell_amount} | Coin amount: {exit_order.remaining} | Profit (stake): {profit_stake} | Profit: {(profit_init_ratio * 100.0):.2f}% | Grind profit: {(slice_profit_exit * 100.0):.2f}%")
+                            self.dp.send_msg(f"Grinding exit (remaining) [{trade.pair}] | Rate: {exit_rate} | Stake amount: {sell_amount} | Coin amount: {exit_order.remaining} | Profit (stake): {profit_stake} | Profit: {(profit_ratio * 100.0):.2f}% | Grind profit: {(slice_profit_exit * 100.0):.2f}%")
                             return -sell_amount
                         else:
                             # partial fill on sell and not yet selling the remaining
@@ -2395,7 +2400,7 @@ class NostalgiaForInfinityX2(IStrategy):
                                     (grind_profit > 0.01)
                             ):
                                 sell_amount = buy_order.filled * exit_rate
-                                self.dp.send_msg(f"Grinding exit [{trade.pair}] | Rate: {exit_rate} | Stake amount: {sell_amount}| Coin amount: {buy_order.filled} | Profit (stake): {profit_stake} | Profit: {(profit_init_ratio * 100.0):.2f}% | Grind profit: {(grind_profit * 100.0):.2f}%")
+                                self.dp.send_msg(f"Grinding exit [{trade.pair}] | Rate: {exit_rate} | Stake amount: {sell_amount}| Coin amount: {buy_order.filled} | Profit (stake): {profit_stake} | Profit: {(profit_ratio * 100.0):.2f}% | Grind profit: {(grind_profit * 100.0):.2f}%")
                                 return -sell_amount
                             break
 
@@ -6121,6 +6126,7 @@ class NostalgiaForInfinityX2(IStrategy):
                 | (dataframe['cti_20_15m'] < -0.9)
                 | (dataframe['rsi_14_15m'] < 30.0)
                 | (dataframe['cti_20_1h'] < -0.8)
+                | (dataframe['rsi_3_1h'] > 25.0)
                 | (dataframe['cti_20_1d'] < -0.8)
                 | (dataframe['ema_200_1h'] > dataframe['ema_200_1h'].shift(576))
             )
@@ -10131,6 +10137,12 @@ class NostalgiaForInfinityX2(IStrategy):
                                           | (dataframe['ema_200_1d'] > dataframe['ema_200_1d'].shift(1152))
                                           | (dataframe['bb40_2_delta'].gt(dataframe['close'] * 0.05))
                                           | (dataframe['close_delta'].gt(dataframe['close'] * 0.04)))
+                    item_buy_logic.append((dataframe['not_downtrend_1h'])
+                                          | (dataframe['not_downtrend_4h'])
+                                          | (dataframe['rsi_14_15m'] < 20.0)
+                                          | (dataframe['rsi_3_1h'] > 10.0)
+                                          | (dataframe['ema_200_1h'] > dataframe['ema_200_1h'].shift(576))
+                                          | (dataframe['ema_200_4h'] > dataframe['ema_200_4h'].shift(1152)))
 
                     # Logic
                     item_buy_logic.append(dataframe['bb40_2_delta'].gt(dataframe['close'] * 0.036))
