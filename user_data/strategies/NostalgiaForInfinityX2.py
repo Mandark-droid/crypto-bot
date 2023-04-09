@@ -10,7 +10,7 @@
     <h1>Error 503 first byte timeout</h1>
     <p>first byte timeout</p>
     <h3>Error 54113</h3>
-    <p>Details: cache-dfw-kdfw8210084-DFW 1681046899 682987371</p>
+    <p>Details: cache-bur-kbur8200143-BUR 1681047467 3557909594</p>
     <hr>
     <p>Varnish cache server</p>
   </body>
